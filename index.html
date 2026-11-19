@@ -74,6 +74,35 @@ input[type=range]::-moz-range-thumb{width:28px;height:28px;border:0;border-radiu
   input[type=range]{height:56px}
 }
 
+/* coda */
+.queue{margin-top:14px;border-top:1px solid var(--line);padding-top:8px}
+.queue h4{margin:0 0 4px;font-size:12px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.qrow{display:flex;gap:8px;align-items:baseline;font-size:13px;padding:3px 0;line-height:1.3}
+.qrow .qt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qrow .qa{color:var(--mut);font-size:12px;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (orientation:landscape){ .queue{max-height:24vh;overflow:auto} }
+
+/* finestra divisa: riproduzione 2/3 + anteprima brano della cronologia 1/3 */
+#nowwrap{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);height:100%}
+.left{min-width:0;min-height:0;overflow:auto}
+#preview{position:relative;min-width:0;overflow:auto;background:var(--card);border-left:1px solid var(--line);padding:12px;display:flex;flex-direction:column;gap:8px;cursor:pointer}
+#preview img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;background:#222}
+.pvt{font-weight:700;overflow-wrap:anywhere}
+.small{font-size:12px}
+.hint{margin-top:auto;padding-top:8px;font-size:12px;color:var(--acc);text-align:center}
+#pvClose{position:absolute;top:4px;right:4px;width:36px;height:36px;background:#000a;z-index:1}
+#pvClose svg{width:18px;height:18px}
+body.split #nowwrap{grid-template-columns:2fr 1fr}
+body.split .np{padding:10px;gap:12px}
+body.split #cover{width:min(48vw,40vh)}
+body.split .trk{font-size:17px}
+body.split .ctrl{flex-wrap:wrap;gap:2px}
+body.split .ctrl .ib{width:40px;height:40px}
+body.split .ctrl .big{width:52px;height:52px}
+body.split .seek span{min-width:34px;font-size:12px}
+body.split input[type=range]{height:40px}
+@media (orientation:landscape){ body.split #cover{width:min(22vw,60vh)} }
+
 /* cronologia */
 .day{font-size:13px;text-transform:capitalize;color:var(--mut);margin:18px 0 6px;font-weight:600}
 .row{display:flex;gap:12px;align-items:center;width:100%;padding:8px;border-radius:10px;text-align:left}
@@ -142,11 +171,14 @@ code{background:#161616;padding:2px 6px;border-radius:4px;word-break:break-all;f
 
   <main>
     <section class="view" id="view-now">
+     <div id="nowwrap">
+      <div class="left">
       <div class="pad" id="nodev" hidden>
         <h2>Nessun dispositivo attivo</h2>
         <p class="muted">Apri l'app Spotify sul telefono e fai partire un brano una volta, poi torna qui. Oppure scegli un dispositivo:</p>
         <div id="devList"></div>
         <button class="btn sec" id="devRefresh">Aggiorna</button>
+        <a class="btn" href="spotify:">Apri l'app Spotify</a>
       </div>
       <div class="np" id="player" hidden>
         <img id="cover" alt="">
@@ -169,8 +201,20 @@ code{background:#161616;padding:2px 6px;border-radius:4px;word-break:break-all;f
             <button class="ib" id="rep" aria-label="Ripeti" data-ic="rep"></button>
           </div>
           <div class="dev" id="devName"></div>
+          <div class="queue" id="queue" hidden></div>
         </div>
       </div>
+      </div>
+      <aside id="preview" hidden>
+        <button class="ib" id="pvClose" aria-label="Chiudi anteprima" data-ic="close"></button>
+        <img id="pvCover" alt="">
+        <div class="pvt" id="pvTitle"></div>
+        <div class="muted" id="pvArtist"></div>
+        <div class="muted small" id="pvAlbum"></div>
+        <div class="muted small" id="pvMeta"></div>
+        <div class="hint">Tocca per riprodurre</div>
+      </aside>
+     </div>
     </section>
 
     <section class="view" id="view-history" hidden>
@@ -185,6 +229,10 @@ code{background:#161616;padding:2px 6px;border-radius:4px;word-break:break-all;f
         <div class="card">
           <div class="sw"><div><h3>Schermo sempre acceso</h3><p>Utile quando usi la barra di ascolto in orizzontale.</p></div>
           <input type="checkbox" id="wakeSw" style="width:24px;height:24px"></div>
+        </div>
+        <div class="card">
+          <div class="sw"><div><h3>Player integrato (sperimentale)</h3><p>La musica esce direttamente da Mio Player: non serve aprire l'app Spotify. Se l'audio non parte o si interrompe, disattivalo e usa l'app Spotify.</p></div>
+          <input type="checkbox" id="embSw" style="width:24px;height:24px"></div>
         </div>
         <div class="card">
           <h3>Collegamento a Spotify</h3>
@@ -204,7 +252,8 @@ code{background:#161616;padding:2px 6px;border-radius:4px;word-break:break-all;f
 /* ---------- utilità ---------- */
 const $ = s => document.querySelector(s);
 const LS = { get:k=>localStorage.getItem(k), set:(k,v)=>localStorage.setItem(k,v), del:k=>localStorage.removeItem(k) };
-const SCOPES = 'user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-recently-played';
+const SCOPES = 'user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-recently-played streaming user-read-email user-read-private';
+const SCV = '2'; // versione dei permessi richiesti: se cambia, serve rifare il login
 const REDIRECT = location.origin + location.pathname;
 const cid = () => LS.get('cid');
 const fmt = ms => { const s=Math.max(0,Math.floor(ms/1000)),h=Math.floor(s/3600),m=Math.floor(s%3600/60),r=s%60;
@@ -222,6 +271,7 @@ const IC = {
   play:'<path class="f" d="M7 4l13 8-13 8z"/>',
   pause:'<rect class="f" x="6" y="4" width="4" height="16"/><rect class="f" x="14" y="4" width="4" height="16"/>',
   shuf:'<path d="M3 7h4l10 10h4M3 17h4l3-3M14 10l3-3h4M18 4l3 3-3 3M18 14l3 3-3 3"/>',
+  close:'<path d="M6 6l12 12M18 6L6 18"/>',
   rep:'<path d="M4 11V9a3 3 0 0 1 3-3h13M17 3l3 3-3 3M20 13v2a3 3 0 0 1-3 3H4M7 21l-3-3 3-3"/>'
 };
 const svg = n => `<svg viewBox="0 0 24 24" aria-hidden="true">${IC[n]}</svg>`;
@@ -258,6 +308,7 @@ async function handleCallback(){
   if (q.get('error')) throw new Error('Accesso negato o annullato');
   if (q.get('state') !== LS.get('state')) throw new Error('Risposta di login non valida, riprova');
   saveTokens(await tokenReq({ grant_type:'authorization_code', code:q.get('code'), redirect_uri:REDIRECT, code_verifier:LS.get('verifier') }));
+  LS.set('scv', SCV);
 }
 async function token(){
   if (Date.now() < +LS.get('exp') && LS.get('at')) return LS.get('at');
@@ -299,6 +350,7 @@ function show(v){
   $('#title').textContent = VIEWS[v];
   document.querySelectorAll('.menu button').forEach(b => b.classList.toggle('on', b.dataset.view === v));
   document.body.classList.remove('open');
+  if (v !== 'now') closePreview();
   if (v === 'history') loadHistory();
   if (v === 'now') poll();
 }
@@ -312,7 +364,8 @@ let st = null, dragging = false, pollT = null;
 function curPos(){ if(!st) return 0; const p = st.progress + (st.playing ? Date.now() - st.at : 0); return Math.min(p, st.duration); }
 function setFill(){ const el=$('#seek'); el.style.setProperty('--p', (el.max>0 ? (el.value/el.max*100) : 0) + '%'); }
 function renderNow(){
-  if (!st){ $('#player').hidden = true; $('#nodev').hidden = false; loadDevices(); return; }
+  if (!st){ $('#player').hidden = true; $('#queue').hidden = true; $('#nodev').hidden = false; loadDevices(); return; }
+  autoTried = false;
   $('#nodev').hidden = true; $('#player').hidden = false;
   const it = st.item;
   $('#track').textContent = it?.name || 'Nessun brano';
@@ -326,6 +379,7 @@ function renderNow(){
   $('#rep').style.opacity = st.repeat === 'track' ? 1 : '';
   $('#devName').textContent = st.device ? ('Su: ' + st.device.name) : '';
   tick();
+  loadQueue();
 }
 function tick(){
   if (!st || dragging || $('#view-now').hidden) return;
@@ -335,7 +389,7 @@ setInterval(tick, 400);
 async function poll(){
   try {
     const s = await api('/me/player?additional_types=track,episode');
-    if (!s || !s.device) st = null;
+    if (!s || !s.device){ st = null; await autoTransfer(); }
     else st = { playing:s.is_playing, progress:s.progress_ms||0, duration:s.item?.duration_ms||0, item:s.item,
                 shuffle:s.shuffle_state, repeat:s.repeat_state, device:s.device, at:Date.now() };
     renderNow();
@@ -406,7 +460,7 @@ async function loadHistory(){
       const c = document.createElement('div'); c.className = 'muted'; c.style.fontSize = '13px'; c.textContent = tr.artists.map(x=>x.name).join(', ');
       t.append(a, c);
       const h = document.createElement('div'); h.className = 'h'; h.textContent = when.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
-      b.append(img, t, h); b.onclick = () => playUri(tr.uri); list.appendChild(b);
+      b.append(img, t, h); b.onclick = () => openPreview(tr, it.played_at); list.appendChild(b);
     });
   } catch(e){ $('#histNote').textContent = 'Impossibile caricare la cronologia: ' + (e.message||''); apiErr(e); }
 }
@@ -423,6 +477,99 @@ async function playUri(uri){
   } catch(e){ apiErr(e); }
 }
 
+/* ---------- anteprima di un brano della cronologia ---------- */
+let pv = null;
+function openPreview(tr, playedAt){
+  pv = { tr };
+  $('#pvCover').src = tr.album?.images?.[0]?.url || '';
+  $('#pvTitle').textContent = tr.name;
+  $('#pvArtist').textContent = tr.artists.map(a=>a.name).join(', ');
+  $('#pvAlbum').textContent = tr.album?.name || '';
+  const when = new Date(playedAt);
+  $('#pvMeta').textContent = 'Durata ' + fmt(tr.duration_ms || 0) + ' · ascoltato ' + dayLabel(when).toLowerCase() + ' alle ' + when.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+  $('#preview').hidden = false; document.body.classList.add('split');
+  show('now');
+}
+function closePreview(){ pv = null; $('#preview').hidden = true; document.body.classList.remove('split'); }
+$('#preview').onclick = () => { if (!pv) return; const u = pv.tr.uri; closePreview(); playUri(u); };
+$('#pvClose').onclick = e => { e.stopPropagation(); closePreview(); };
+
+/* ---------- coda ---------- */
+let queueFor = null, queueAt = 0;
+const SEP = /^[\s:;,.\-–—·|\/()\[\]]+|[\s:;,.\-–—·|\/()\[\]]+$/g;
+// Toglie dai titoli in coda le parole iniziali/finali uguali a quelle del brano in riproduzione,
+// ma solo se almeno due brani in coda le condividono.
+function trimShared(cur, names){
+  const MIN = 6, cw = cur.split(/\s+/).filter(Boolean), eq = (a,b) => a.toLowerCase() === b.toLowerCase();
+  const info = names.map(n => {
+    const w = n.split(/\s+/).filter(Boolean);
+    let p = 0; while (p < w.length && p < cw.length && eq(w[p], cw[p])) p++;
+    let s = 0; while (s < w.length - p && s < cw.length - p && eq(w[w.length-1-s], cw[cw.length-1-s])) s++;
+    const pre = w.slice(0,p).join(' '), suf = s ? w.slice(w.length - s).join(' ') : '';
+    return { w, p, s, preOk: pre.length >= MIN, sufOk: suf.length >= MIN };
+  });
+  if (info.filter(i => i.preOk || i.sufOk).length < 2) return names;
+  return info.map((i,k) => {
+    if (!(i.preOk || i.sufOk)) return names[k];
+    const a = i.preOk ? i.p : 0, b = i.w.length - (i.sufOk ? i.s : 0);
+    if (b <= a) return names[k];
+    return i.w.slice(a,b).join(' ').replace(SEP,'') || names[k];
+  });
+}
+async function loadQueue(){
+  const id = st?.item?.id, box = $('#queue');
+  if (!id){ box.hidden = true; return; }
+  if (id === queueFor && Date.now() - queueAt < 30000) return;
+  queueFor = id; queueAt = Date.now();
+  try { const q = await api('/me/player/queue'); renderQueue(q?.queue || []); }
+  catch(e){ if (e.auth) apiErr(e); box.hidden = true; }
+}
+function renderQueue(items){
+  const box = $('#queue'); box.innerHTML = '';
+  items = items.filter(Boolean).slice(0, 20);
+  if (!items.length || !st?.item){ box.hidden = true; return; }
+  const titles = trimShared(st.item.name || '', items.map(i => i.name || ''));
+  const h = document.createElement('h4'); h.textContent = 'Prossimi brani'; box.appendChild(h);
+  items.forEach((it, i) => {
+    const r = document.createElement('div'); r.className = 'qrow';
+    const t = document.createElement('div'); t.className = 'qt'; t.textContent = titles[i];
+    const a = document.createElement('div'); a.className = 'qa'; a.textContent = it.artists?.map(x => x.name).join(', ') || it.show?.name || '';
+    r.append(t, a); box.appendChild(r);
+  });
+  box.hidden = false;
+}
+
+/* ---------- player integrato (la musica esce da questa app) ---------- */
+const embOn = () => LS.get('emb') !== '0';
+let sdkPlayer = null, sdkDevice = null, autoTried = false;
+function loadSdk(){
+  return new Promise((res, rej) => {
+    if (window.Spotify) return res();
+    window.onSpotifyWebPlaybackSDKReady = () => res();
+    const s = document.createElement('script'); s.src = 'https://sdk.scdn.co/spotify-player.js';
+    s.onerror = () => rej(new Error('Player integrato non caricato')); document.head.appendChild(s);
+  });
+}
+async function startEmbedded(){
+  if (sdkPlayer) return;
+  try { await loadSdk(); } catch(e){ toast(e.message); return; }
+  sdkPlayer = new Spotify.Player({ name:'Mio Player', volume:0.8, getOAuthToken: cb => token().then(cb).catch(()=>{}) });
+  sdkPlayer.addListener('ready', ({device_id}) => { sdkDevice = device_id; poll(); });
+  sdkPlayer.addListener('not_ready', () => { sdkDevice = null; });
+  ['initialization_error','authentication_error','account_error','playback_error'].forEach(ev =>
+    sdkPlayer.addListener(ev, e => toast('Player integrato: ' + (e?.message || ev))));
+  sdkPlayer.addListener('autoplay_failed', () => toast("Tocca lo schermo per attivare l'audio"));
+  sdkPlayer.connect();
+}
+function stopEmbedded(){ try { sdkPlayer?.disconnect(); } catch {} sdkPlayer = null; sdkDevice = null; }
+async function autoTransfer(){
+  if (!(embOn() && sdkDevice && !autoTried)) return;
+  autoTried = true;
+  try { await api('/me/player', {method:'PUT', body:{device_ids:[sdkDevice], play:false}}); setTimeout(poll, 700); } catch(e){}
+}
+// i browser mobili vogliono un tocco dell'utente prima di far uscire l'audio
+document.addEventListener('click', () => { try { sdkPlayer?.activateElement?.(); } catch {} }, true);
+
 /* ---------- impostazioni ---------- */
 let wl = null;
 async function wake(){
@@ -430,6 +577,8 @@ async function wake(){
 }
 $('#wakeSw').checked = LS.get('wake') === '1';
 $('#wakeSw').onchange = e => { LS.set('wake', e.target.checked ? '1' : '0'); if (e.target.checked) wake(); else { wl?.release(); wl = null; } };
+$('#embSw').checked = embOn();
+$('#embSw').onchange = e => { LS.set('emb', e.target.checked ? '1' : '0'); if (e.target.checked) startEmbedded(); else stopEmbedded(); };
 $('#relogin').onclick = login;
 $('#changeCid').onclick = () => { LS.del('rt'); LS.del('at'); showSetup(); };
 $('#logout').onclick = () => { ['at','rt','exp','verifier','state'].forEach(LS.del); showSetup(); };
@@ -456,8 +605,10 @@ async function loadMe(){
   if (!cid()) return showSetup();
   try { await handleCallback(); } catch(e){ return showSetup(e.message); }
   if (!LS.get('rt')) return showSetup();
+  if (LS.get('scv') !== SCV) return showSetup('Aggiornamento: tocca "Accedi con Spotify" per concedere i nuovi permessi.');
   $('#setup').hidden = true; $('#app').hidden = false;
   show('now'); loadMe(); startPolling(); wake();
+  if (embOn()) startEmbedded();
 })();
 </script>
 </body>
