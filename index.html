@@ -694,7 +694,7 @@ $('#pvClose').onclick = e => { e.stopPropagation(); closePreview(); };
 let queueFor = null, queueAt = 0;
 const SEP = /^[\s:;,.\-–—·|\/()\[\]]+|[\s:;,.\-–—·|\/()\[\]]+$/g;
 // Toglie dai titoli in coda le parole iniziali/finali uguali a quelle del brano in riproduzione,
-// ma solo se almeno due brani in coda le condividono.
+// (basta anche un solo brano in coda che le condivida).
 function trimShared(cur, names){
   const MIN = 6, cw = cur.split(/\s+/).filter(Boolean), eq = (a,b) => a.toLowerCase() === b.toLowerCase();
   const info = names.map(n => {
@@ -704,7 +704,7 @@ function trimShared(cur, names){
     const pre = w.slice(0,p).join(' '), suf = s ? w.slice(w.length - s).join(' ') : '';
     return { w, p, s, preOk: pre.length >= MIN, sufOk: suf.length >= MIN };
   });
-  if (info.filter(i => i.preOk || i.sufOk).length < 2) return names;
+  if (info.filter(i => i.preOk || i.sufOk).length < 1) return names;
   return info.map((i,k) => {
     if (!(i.preOk || i.sufOk)) return names[k];
     const a = i.preOk ? i.p : 0, b = i.w.length - (i.sufOk ? i.s : 0);
@@ -712,7 +712,7 @@ function trimShared(cur, names){
     return i.w.slice(a,b).join(' ').replace(SEP,'') || names[k];
   });
 }
-// Divide il titolo in due parti: la prima è il testo iniziale in comune con almeno due brani in coda.
+// Divide il titolo in due parti: la prima è il testo iniziale in comune con uno o più brani in coda.
 function splitTitle(cur, names){
   const MIN = 6, cw = cur.split(/\s+/).filter(Boolean), eq = (a,b) => a.toLowerCase() === b.toLowerCase();
   const ps = names.map(n => {
@@ -720,8 +720,8 @@ function splitTitle(cur, names){
     let p = 0; while (p < w.length && p < cw.length && eq(w[p], cw[p])) p++;
     return { p, ok: w.slice(0,p).join(' ').length >= MIN };
   }).filter(x => x.ok).map(x => x.p).sort((a,b) => b - a);
-  if (ps.length < 2) return null;
-  const k = ps[1];                       // il testo più lungo condiviso da almeno due brani in coda
+  if (ps.length < 1) return null;
+  const k = ps[0];                       // il testo iniziale più lungo condiviso con un brano in coda
   if (k >= cw.length) return null;
   return [cw.slice(0,k).join(' '), cw.slice(k).join(' ')];
 }
